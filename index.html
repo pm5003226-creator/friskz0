@@ -249,23 +249,10 @@
             background-position: center;
         }
 
-        .game-card-image img {
+        .game-card-image canvas {
             width: 100%;
             height: 100%;
-            object-fit: cover;
-        }
-
-        .game-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 50px;
+            display: block;
         }
 
         .game-card-title {
@@ -318,7 +305,7 @@
             left: 0;
             right: 0;
             bottom: 0;
-            background: rgba(0, 0, 0, 0.9);
+            background: rgba(0, 0, 0, 0.95);
             z-index: 1000;
             align-items: center;
             justify-content: center;
@@ -333,11 +320,12 @@
             background: #1a1a2e;
             border-radius: 15px;
             width: 100%;
-            max-width: 900px;
+            max-width: 1000px;
             max-height: 90vh;
             overflow: hidden;
             display: flex;
             flex-direction: column;
+            box-shadow: 0 0 50px rgba(0, 212, 255, 0.3);
         }
 
         .game-modal-header {
@@ -359,6 +347,8 @@
             color: #888;
             cursor: pointer;
             transition: all 0.3s ease;
+            background: none;
+            border: none;
         }
 
         .game-modal-close:hover {
@@ -367,16 +357,17 @@
 
         .game-modal-body {
             flex: 1;
-            overflow-y: auto;
+            overflow: hidden;
             display: flex;
             align-items: center;
             justify-content: center;
+            background: #0f0f1e;
         }
 
-        .game-iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
+        #gameCanvas {
+            max-width: 100%;
+            max-height: 100%;
+            display: block;
         }
 
         /* Settings Modal */
@@ -414,6 +405,8 @@
             color: #888;
             cursor: pointer;
             transition: all 0.3s ease;
+            background: none;
+            border: none;
         }
 
         .settings-close:hover {
@@ -474,40 +467,14 @@
             color: #fff;
         }
 
-        .suggest-game {
+        .game-info {
             background: #2a2a3e;
             border: 1px dashed #00d4ff;
-            padding: 20px;
+            padding: 15px;
             border-radius: 10px;
-            text-align: center;
-            cursor: pointer;
-            transition: all 0.3s ease;
             margin-bottom: 20px;
-        }
-
-        .suggest-game:hover {
-            background: #3a3a4e;
-        }
-
-        .loading {
-            text-align: center;
-            padding: 40px;
             color: #aaa;
-        }
-
-        .loader {
-            border: 4px solid #3a3a4e;
-            border-top: 4px solid #00d4ff;
-            border-radius: 50%;
-            width: 40px;
-            height: 40px;
-            animation: spin 1s linear infinite;
-            margin: 20px auto;
-        }
-
-        @keyframes spin {
-            0% { transform: rotate(0deg); }
-            100% { transform: rotate(360deg); }
+            font-size: 0.9em;
         }
     </style>
 </head>
@@ -555,6 +522,9 @@
             <!-- Games Section -->
             <div class="content" id="games">
                 <h2 class="section-title">🎮 Games Library - Click to Play!</h2>
+                <div class="game-info">
+                    💡 Click any game to play it! All games are built-in and run directly in Friskz0.
+                </div>
                 <div class="games-grid" id="gamesGrid">
                     <!-- Games will be populated here -->
                 </div>
@@ -591,14 +561,10 @@
         <div class="game-modal-content">
             <div class="game-modal-header">
                 <h2 class="game-modal-title" id="gameModalTitle">Game</h2>
-                <span class="game-modal-close" onclick="closeGameModal()">&times;</span>
+                <button class="game-modal-close" onclick="closeGameModal()">&times;</button>
             </div>
             <div class="game-modal-body">
-                <div class="loading" id="loadingMsg">
-                    <div class="loader"></div>
-                    <p>Loading game...</p>
-                </div>
-                <iframe id="gameIframe" class="game-iframe" style="display:none;"></iframe>
+                <canvas id="gameCanvas"></canvas>
             </div>
         </div>
     </div>
@@ -606,7 +572,7 @@
     <!-- Settings Modal -->
     <div class="settings-modal" id="settingsModal">
         <div class="settings-content">
-            <span class="settings-close" onclick="closeSettings()">&times;</span>
+            <button class="settings-close" onclick="closeSettings()">&times;</button>
             <h2 style="margin-bottom: 20px;">⚙️ Settings</h2>
             
             <div class="settings-item">
@@ -633,79 +599,301 @@
     </div>
 
     <script>
-        // Games Data with working embedded games
+        // Game Objects
+        let currentGame = null;
+        let gameRunning = false;
+        let gameCanvas = null;
+        let gameCtx = null;
+
+        // FLAPPY BIRD GAME
+        class FlappyBird {
+            constructor(canvas, ctx) {
+                this.canvas = canvas;
+                this.ctx = ctx;
+                this.bird = { x: 50, y: 100, width: 20, height: 20, velocity: 0 };
+                this.pipes = [];
+                this.score = 0;
+                this.gameOver = false;
+                this.gravity = 0.6;
+                this.jumpPower = -12;
+                this.pipeGap = 120;
+                this.pipeWidth = 60;
+                this.pipeSpacing = 200;
+                
+                canvas.addEventListener('click', () => this.jump());
+                canvas.addEventListener('keydown', (e) => {
+                    if (e.code === 'Space') {
+                        e.preventDefault();
+                        this.jump();
+                    }
+                });
+            }
+
+            jump() {
+                if (!this.gameOver) {
+                    this.bird.velocity = this.jumpPower;
+                }
+            }
+
+            update() {
+                if (this.gameOver) return;
+
+                this.bird.velocity += this.gravity;
+                this.bird.y += this.bird.velocity;
+
+                if (this.bird.y + this.bird.height > this.canvas.height || this.bird.y < 0) {
+                    this.gameOver = true;
+                }
+
+                if (this.pipes.length === 0 || this.pipes[this.pipes.length - 1].x < this.canvas.width - this.pipeSpacing) {
+                    const gapY = Math.random() * (this.canvas.height - this.pipeGap - 100) + 50;
+                    this.pipes.push({ x: this.canvas.width, gapY: gapY });
+                }
+
+                for (let i = this.pipes.length - 1; i >= 0; i--) {
+                    this.pipes[i].x -= 5;
+
+                    if (this.pipes[i].x + this.pipeWidth < this.bird.x && !this.pipes[i].scored) {
+                        this.pipes[i].scored = true;
+                        this.score++;
+                    }
+
+                    if (this.pipes[i].x < -this.pipeWidth) {
+                        this.pipes.splice(i, 1);
+                        continue;
+                    }
+
+                    if (this.checkCollision(this.pipes[i])) {
+                        this.gameOver = true;
+                    }
+                }
+            }
+
+            checkCollision(pipe) {
+                return this.bird.x < pipe.x + this.pipeWidth &&
+                       this.bird.x + this.bird.width > pipe.x &&
+                       (this.bird.y < pipe.gapY || this.bird.y + this.bird.height > pipe.gapY + this.pipeGap);
+            }
+
+            draw() {
+                this.ctx.fillStyle = '#87CEEB';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                this.ctx.fillStyle = '#FFD700';
+                this.ctx.fillRect(this.bird.x, this.bird.y, this.bird.width, this.bird.height);
+
+                this.ctx.fillStyle = '#228B22';
+                for (let pipe of this.pipes) {
+                    this.ctx.fillRect(pipe.x, 0, this.pipeWidth, pipe.gapY);
+                    this.ctx.fillRect(pipe.x, pipe.gapY + this.pipeGap, this.pipeWidth, this.canvas.height - pipe.gapY - this.pipeGap);
+                }
+
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.font = 'bold 24px Arial';
+                this.ctx.fillText('Score: ' + this.score, 10, 30);
+                if (this.gameOver) {
+                    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                    this.ctx.fillStyle = '#FFFFFF';
+                    this.ctx.font = 'bold 40px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.fillText('GAME OVER', this.canvas.width / 2, this.canvas.height / 2);
+                    this.ctx.font = 'bold 20px Arial';
+                    this.ctx.fillText('Score: ' + this.score, this.canvas.width / 2, this.canvas.height / 2 + 40);
+                }
+            }
+
+            loop() {
+                this.update();
+                this.draw();
+                if (gameRunning) requestAnimationFrame(() => this.loop());
+            }
+        }
+
+        // SNAKE GAME
+        class SnakeGame {
+            constructor(canvas, ctx) {
+                this.canvas = canvas;
+                this.ctx = ctx;
+                this.gridSize = 20;
+                this.snake = [{ x: 10, y: 10 }];
+                this.food = { x: 15, y: 15 };
+                this.direction = { x: 1, y: 0 };
+                this.nextDirection = { x: 1, y: 0 };
+                this.score = 0;
+                this.gameOver = false;
+
+                document.addEventListener('keydown', (e) => this.handleKeyPress(e));
+            }
+
+            handleKeyPress(e) {
+                if (e.key === 'ArrowUp' && this.direction.y === 0) this.nextDirection = { x: 0, y: -1 };
+                if (e.key === 'ArrowDown' && this.direction.y === 0) this.nextDirection = { x: 0, y: 1 };
+                if (e.key === 'ArrowLeft' && this.direction.x === 0) this.nextDirection = { x: -1, y: 0 };
+                if (e.key === 'ArrowRight' && this.direction.x === 0) this.nextDirection = { x: 1, y: 0 };
+            }
+
+            update() {
+                if (this.gameOver) return;
+
+                this.direction = this.nextDirection;
+                const head = { x: this.snake[0].x + this.direction.x, y: this.snake[0].y + this.direction.y };
+
+                if (head.x < 0 || head.x >= this.canvas.width / this.gridSize ||
+                    head.y < 0 || head.y >= this.canvas.height / this.gridSize) {
+                    this.gameOver = true;
+                    return;
+                }
+
+                for (let segment of this.snake) {
+                    if (head.x === segment.x && head.y === segment.y) {
+                        this.gameOver = true;
+                        return;
+                    }
+                }
+
+                this.snake.unshift(head);
+
+                if (head.x === this.food.x && head.y === this.food.y) {
+                    this.score += 10;
+                    this.food = {
+                        x: Math.floor(Math.random() * (this.canvas.width / this.gridSize)),
+                        y: Math.floor(Math.random() * (this.canvas.height / this.gridSize))
+                    };
+                } else {
+                    this.snake.pop();
+                }
+            }
+
+            draw() {
+                this.ctx.fillStyle = '#000000';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                this.ctx.fillStyle = '#00FF00';
+                for (let segment of this.snake) {
+                    this.ctx.fillRect(segment.x * this.gridSize, segment.y * this.gridSize, this.gridSize - 2, this.gridSize - 2);
+                }
+
+                this.ctx.fillStyle = '#FF0000';
+                this.ctx.fillRect(this.food.x * this.gridSize, this.food.y * this.gridSize, this.gridSize - 2, this.gridSize - 2);
+
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.font = 'bold 20px Arial';
+                this.ctx.fillText('Score: ' + this.score, 10, 30);
+
+                if (this.gameOver) {
+                    this.ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+                    this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                    this.ctx.fillStyle = '#FFFFFF';
+                    this.ctx.font = 'bold 40px Arial';
+                    this.ctx.textAlign = 'center';
+                    this.ctx.fillText('GAME OVER', this.canvas.width / 2, this.canvas.height / 2);
+                }
+            }
+
+            loop() {
+                this.update();
+                this.draw();
+                if (gameRunning) setTimeout(() => this.loop(), 100);
+            }
+        }
+
+        // PONG GAME
+        class PongGame {
+            constructor(canvas, ctx) {
+                this.canvas = canvas;
+                this.ctx = ctx;
+                this.paddleHeight = 80;
+                this.paddleWidth = 10;
+                this.ballSize = 8;
+                this.player1 = { x: 10, y: this.canvas.height / 2 - this.paddleHeight / 2, score: 0 };
+                this.player2 = { x: this.canvas.width - 20, y: this.canvas.height / 2 - this.paddleHeight / 2, score: 0 };
+                this.ball = { x: this.canvas.width / 2, y: this.canvas.height / 2, vx: 5, vy: 5 };
+                this.gameOver = false;
+
+                document.addEventListener('keydown', (e) => this.handleKeyPress(e));
+            }
+
+            handleKeyPress(e) {
+                if (e.key === 'w') this.player1.y -= 20;
+                if (e.key === 's') this.player1.y += 20;
+                if (e.key === 'ArrowUp') this.player2.y -= 20;
+                if (e.key === 'ArrowDown') this.player2.y += 20;
+            }
+
+            update() {
+                if (this.gameOver) return;
+
+                this.ball.x += this.ball.vx;
+                this.ball.y += this.ball.vy;
+
+                if (this.ball.y - this.ballSize < 0 || this.ball.y + this.ballSize > this.canvas.height) {
+                    this.ball.vy = -this.ball.vy;
+                }
+
+                if (this.ball.x - this.ballSize < this.player1.x + this.paddleWidth &&
+                    this.ball.y > this.player1.y && this.ball.y < this.player1.y + this.paddleHeight) {
+                    this.ball.vx = -this.ball.vx;
+                }
+
+                if (this.ball.x + this.ballSize > this.player2.x &&
+                    this.ball.y > this.player2.y && this.ball.y < this.player2.y + this.paddleHeight) {
+                    this.ball.vx = -this.ball.vx;
+                }
+
+                if (this.ball.x < 0) {
+                    this.player2.score++;
+                    this.ball = { x: this.canvas.width / 2, y: this.canvas.height / 2, vx: 5, vy: 5 };
+                }
+                if (this.ball.x > this.canvas.width) {
+                    this.player1.score++;
+                    this.ball = { x: this.canvas.width / 2, y: this.canvas.height / 2, vx: -5, vy: 5 };
+                }
+            }
+
+            draw() {
+                this.ctx.fillStyle = '#000000';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+                this.ctx.fillStyle = '#FFFFFF';
+                this.ctx.fillRect(this.player1.x, this.player1.y, this.paddleWidth, this.paddleHeight);
+                this.ctx.fillRect(this.player2.x, this.player2.y, this.paddleWidth, this.paddleHeight);
+                this.ctx.beginPath();
+                this.ctx.arc(this.ball.x, this.ball.y, this.ballSize, 0, Math.PI * 2);
+                this.ctx.fill();
+
+                this.ctx.font = 'bold 24px Arial';
+                this.ctx.textAlign = 'center';
+                this.ctx.fillText(this.player1.score + ' : ' + this.player2.score, this.canvas.width / 2, 30);
+                this.ctx.textAlign = 'left';
+            }
+
+            loop() {
+                this.update();
+                this.draw();
+                if (gameRunning) requestAnimationFrame(() => this.loop());
+            }
+        }
+
+        // Games Data
         const games = [
             { 
                 name: 'Flappy Bird', 
-                emoji: '🐦',
-                url: 'https://playcanvas.com/project/633024/view',
+                class: FlappyBird,
+                description: 'Click to flap! Avoid the pipes.',
                 thumbnail: '🐦'
             },
             { 
-                name: 'Snake Game', 
-                emoji: '🐍',
-                url: 'https://playcanvas.com/project/414329/view',
+                name: 'Snake', 
+                class: SnakeGame,
+                description: 'Arrow keys to move. Eat the food!',
                 thumbnail: '🐍'
             },
             { 
-                name: 'Pac-Man', 
-                emoji: '👾',
-                url: 'https://playcanvas.com/project/414329/view',
-                thumbnail: '👾'
-            },
-            { 
-                name: 'OvO', 
-                emoji: '⭕',
-                url: 'https://playcanvas.com/project/614208/view',
-                thumbnail: '⭕'
-            },
-            { 
                 name: 'Pong', 
-                emoji: '🎾',
-                url: 'https://playcanvas.com/project/483465/view',
+                class: PongGame,
+                description: 'W/S or Arrow keys. Don\'t miss the ball!',
                 thumbnail: '🎾'
-            },
-            { 
-                name: 'Memory Match', 
-                emoji: '🧠',
-                url: 'https://playcanvas.com/project/657249/view',
-                thumbnail: '🧠'
-            },
-            { 
-                name: 'Breakout', 
-                emoji: '🧱',
-                url: 'https://playcanvas.com/project/484704/view',
-                thumbnail: '🧱'
-            },
-            { 
-                name: 'Dino Runner', 
-                emoji: '🦖',
-                url: 'https://chromedino.com/',
-                thumbnail: '🦖'
-            },
-            { 
-                name: 'Tetris', 
-                emoji: '🧩',
-                url: 'https://playcanvas.com/project/567768/view',
-                thumbnail: '🧩'
-            },
-            { 
-                name: 'Chess', 
-                emoji: '♟️',
-                url: 'https://www.chess.com/play/online',
-                thumbnail: '♟️'
-            },
-            { 
-                name: 'Tic Tac Toe', 
-                emoji: '⭕❌',
-                url: 'https://playcanvas.com/project/621276/view',
-                thumbnail: '⭕'
-            },
-            { 
-                name: 'Simon Says', 
-                emoji: '🎯',
-                url: 'https://playcanvas.com/project/662537/view',
-                thumbnail: '🎯'
             }
         ];
 
@@ -747,7 +935,7 @@
             grid.innerHTML = games.map((game, index) => `
                 <div class="game-card" onclick="playGame(${index})">
                     <div class="game-card-image">
-                        <div class="game-overlay">${game.emoji}</div>
+                        <div style="font-size: 60px;">${game.thumbnail}</div>
                     </div>
                     <div class="game-card-title">${game.name}</div>
                 </div>
@@ -787,29 +975,28 @@
         function playGame(index) {
             const game = games[index];
             document.getElementById('gameModalTitle').textContent = game.name;
-            document.getElementById('gameIframe').src = game.url;
             document.getElementById('gameModal').classList.add('active');
             
-            // Hide loading after a delay
-            setTimeout(() => {
-                document.getElementById('loadingMsg').style.display = 'none';
-                document.getElementById('gameIframe').style.display = 'block';
-            }, 2000);
+            gameCanvas = document.getElementById('gameCanvas');
+            gameCanvas.width = 800;
+            gameCanvas.height = 600;
+            gameCtx = gameCanvas.getContext('2d');
+            
+            gameRunning = true;
+            currentGame = new game.class(gameCanvas, gameCtx);
+            currentGame.loop();
         }
 
         function closeGameModal() {
             document.getElementById('gameModal').classList.remove('active');
-            document.getElementById('gameIframe').src = '';
-            document.getElementById('loadingMsg').style.display = 'block';
-            document.getElementById('gameIframe').style.display = 'none';
+            gameRunning = false;
+            currentGame = null;
+            document.removeEventListener('keydown', null);
         }
 
         function showSection(sectionId) {
-            // Hide all
             document.querySelectorAll('.content').forEach(el => el.classList.remove('active'));
             document.querySelectorAll('.sidebar-icon').forEach(el => el.classList.remove('active'));
-
-            // Show selected
             document.getElementById(sectionId).classList.add('active');
             event.target.classList.add('active');
         }
@@ -819,9 +1006,7 @@
         }
 
         function handleSearch(event) {
-            if (event.key === 'Enter') {
-                searchUrl();
-            }
+            if (event.key === 'Enter') searchUrl();
         }
 
         function handleHomeSearch(event) {
@@ -849,28 +1034,20 @@
 
         function toggleFullscreen() {
             if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen().catch(err => {
-                    console.log('Fullscreen not available');
-                });
+                document.documentElement.requestFullscreen().catch(() => {});
             } else {
                 document.exitFullscreen();
             }
         }
 
-        // Close modals when clicking outside
         window.onclick = function(event) {
             const gameModal = document.getElementById('gameModal');
             const settingsModal = document.getElementById('settingsModal');
             
-            if (event.target == gameModal) {
-                closeGameModal();
-            }
-            if (event.target == settingsModal) {
-                closeSettings();
-            }
+            if (event.target == gameModal) closeGameModal();
+            if (event.target == settingsModal) closeSettings();
         }
 
-        // Close game modal on Escape key
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 closeGameModal();
