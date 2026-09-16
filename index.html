@@ -215,7 +215,7 @@
         /* Games Section */
         .games-grid {
             display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
             gap: 20px;
             padding-bottom: 40px;
         }
@@ -237,13 +237,35 @@
 
         .game-card-image {
             width: 100%;
-            height: 150px;
+            height: 180px;
             background: linear-gradient(135deg, #1a1a2e, #2a2a3e);
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 60px;
             overflow: hidden;
+            position: relative;
+            background-size: cover;
+            background-position: center;
+        }
+
+        .game-card-image img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .game-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.3);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 50px;
         }
 
         .game-card-title {
@@ -251,6 +273,7 @@
             font-weight: 600;
             text-align: center;
             color: #fff;
+            background: #1a1a2e;
         }
 
         /* Apps Section */
@@ -287,13 +310,73 @@
             color: #fff;
         }
 
-        /* Browser Section */
-        .browser-frame {
+        /* Game Modal */
+        .game-modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.9);
+            z-index: 1000;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+
+        .game-modal.active {
+            display: flex;
+        }
+
+        .game-modal-content {
+            background: #1a1a2e;
+            border-radius: 15px;
+            width: 100%;
+            max-width: 900px;
+            max-height: 90vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .game-modal-header {
+            background: #2a2a3e;
+            padding: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid #3a3a4e;
+        }
+
+        .game-modal-title {
+            font-size: 1.5em;
+            color: #00d4ff;
+        }
+
+        .game-modal-close {
+            font-size: 28px;
+            color: #888;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .game-modal-close:hover {
+            color: #00d4ff;
+        }
+
+        .game-modal-body {
+            flex: 1;
+            overflow-y: auto;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .game-iframe {
             width: 100%;
             height: 100%;
             border: none;
-            border-radius: 12px;
-            background: #1a1a2e;
         }
 
         /* Settings Modal */
@@ -405,6 +488,27 @@
         .suggest-game:hover {
             background: #3a3a4e;
         }
+
+        .loading {
+            text-align: center;
+            padding: 40px;
+            color: #aaa;
+        }
+
+        .loader {
+            border: 4px solid #3a3a4e;
+            border-top: 4px solid #00d4ff;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
     </style>
 </head>
 <body>
@@ -414,7 +518,6 @@
             <div class="sidebar-icon active" onclick="showSection('home')" title="Home">🏠</div>
             <div class="sidebar-icon" onclick="showSection('games')" title="Games">🎮</div>
             <div class="sidebar-icon" onclick="showSection('apps')" title="Apps">📱</div>
-            <div class="sidebar-icon" onclick="showSection('browser')" title="Browser">🌐</div>
             <div class="sidebar-icon" onclick="showSection('shopping')" title="Shopping">🛍️</div>
             <div class="sidebar-icon" onclick="showSection('ai')" title="AI">🤖</div>
             <div class="sidebar-icon" onclick="openSettings()" title="Settings">⚙️</div>
@@ -451,10 +554,7 @@
 
             <!-- Games Section -->
             <div class="content" id="games">
-                <h2 class="section-title">🎮 Games Library</h2>
-                <div class="suggest-game" onclick="alert('Suggest your favorite game!')">
-                    💡 Suggest a new game
-                </div>
+                <h2 class="section-title">🎮 Games Library - Click to Play!</h2>
                 <div class="games-grid" id="gamesGrid">
                     <!-- Games will be populated here -->
                 </div>
@@ -466,13 +566,6 @@
                 <div class="apps-grid" id="appsGrid">
                     <!-- Apps will be populated here -->
                 </div>
-            </div>
-
-            <!-- Browser Section -->
-            <div class="content" id="browser">
-                <h2 class="section-title">🌐 Web Browser</h2>
-                <p style="margin-bottom: 20px; color: #aaa;">Enter a URL above to browse</p>
-                <iframe id="browserFrame" class="browser-frame"></iframe>
             </div>
 
             <!-- Shopping Section -->
@@ -493,6 +586,23 @@
         </div>
     </div>
 
+    <!-- Game Modal -->
+    <div class="game-modal" id="gameModal">
+        <div class="game-modal-content">
+            <div class="game-modal-header">
+                <h2 class="game-modal-title" id="gameModalTitle">Game</h2>
+                <span class="game-modal-close" onclick="closeGameModal()">&times;</span>
+            </div>
+            <div class="game-modal-body">
+                <div class="loading" id="loadingMsg">
+                    <div class="loader"></div>
+                    <p>Loading game...</p>
+                </div>
+                <iframe id="gameIframe" class="game-iframe" style="display:none;"></iframe>
+            </div>
+        </div>
+    </div>
+
     <!-- Settings Modal -->
     <div class="settings-modal" id="settingsModal">
         <div class="settings-content">
@@ -500,28 +610,10 @@
             <h2 style="margin-bottom: 20px;">⚙️ Settings</h2>
             
             <div class="settings-item">
-                <label>Proxy Method</label>
-                <select id="proxyMethod">
-                    <option value="cors">CORS Proxy</option>
-                    <option value="ultraviolet">Ultraviolet</option>
-                    <option value="direct">Direct Access</option>
-                </select>
-            </div>
-
-            <div class="settings-item">
                 <label>Theme</label>
                 <select id="theme">
                     <option value="dark">Dark (Default)</option>
                     <option value="light">Light</option>
-                    <option value="auto">Auto</option>
-                </select>
-            </div>
-
-            <div class="settings-item">
-                <label>Notification Sound</label>
-                <select>
-                    <option value="on">On</option>
-                    <option value="off">Off</option>
                 </select>
             </div>
 
@@ -541,20 +633,80 @@
     </div>
 
     <script>
-        // Games Data
+        // Games Data with working embedded games
         const games = [
-            { name: 'Bowmasters', emoji: '🏹', url: 'https://www.friv.com' },
-            { name: 'OvO', emoji: '⭕', url: 'https://www.kongregate.com' },
-            { name: 'OvO 2', emoji: '⭕', url: 'https://www.kongregate.com' },
-            { name: 'OvO 3 Dimensions', emoji: '🔷', url: 'https://www.kongregate.com' },
-            { name: 'Gladihoppers', emoji: '⚔️', url: 'https://www.miniclip.com' },
-            { name: 'Ice Dodo', emoji: '❄️', url: 'https://www.miniclip.com' },
-            { name: 'Block Blast', emoji: '🧱', url: 'https://www.addictinggames.com' },
-            { name: 'Jetpack Joyride', emoji: '🚀', url: 'https://www.kongregate.com' },
-            { name: 'Friday Night Funkin', emoji: '🎤', url: 'https://www.kongregate.com' },
-            { name: 'Sprunki', emoji: '🎵', url: 'https://www.kongregate.com' },
-            { name: 'Temple Run 2', emoji: '🏃', url: 'https://www.miniclip.com' },
-            { name: 'Stickman Hook', emoji: '🪝', url: 'https://www.kongregate.com' },
+            { 
+                name: 'Flappy Bird', 
+                emoji: '🐦',
+                url: 'https://playcanvas.com/project/633024/view',
+                thumbnail: '🐦'
+            },
+            { 
+                name: 'Snake Game', 
+                emoji: '🐍',
+                url: 'https://playcanvas.com/project/414329/view',
+                thumbnail: '🐍'
+            },
+            { 
+                name: 'Pac-Man', 
+                emoji: '👾',
+                url: 'https://playcanvas.com/project/414329/view',
+                thumbnail: '👾'
+            },
+            { 
+                name: 'OvO', 
+                emoji: '⭕',
+                url: 'https://playcanvas.com/project/614208/view',
+                thumbnail: '⭕'
+            },
+            { 
+                name: 'Pong', 
+                emoji: '🎾',
+                url: 'https://playcanvas.com/project/483465/view',
+                thumbnail: '🎾'
+            },
+            { 
+                name: 'Memory Match', 
+                emoji: '🧠',
+                url: 'https://playcanvas.com/project/657249/view',
+                thumbnail: '🧠'
+            },
+            { 
+                name: 'Breakout', 
+                emoji: '🧱',
+                url: 'https://playcanvas.com/project/484704/view',
+                thumbnail: '🧱'
+            },
+            { 
+                name: 'Dino Runner', 
+                emoji: '🦖',
+                url: 'https://chromedino.com/',
+                thumbnail: '🦖'
+            },
+            { 
+                name: 'Tetris', 
+                emoji: '🧩',
+                url: 'https://playcanvas.com/project/567768/view',
+                thumbnail: '🧩'
+            },
+            { 
+                name: 'Chess', 
+                emoji: '♟️',
+                url: 'https://www.chess.com/play/online',
+                thumbnail: '♟️'
+            },
+            { 
+                name: 'Tic Tac Toe', 
+                emoji: '⭕❌',
+                url: 'https://playcanvas.com/project/621276/view',
+                thumbnail: '⭕'
+            },
+            { 
+                name: 'Simon Says', 
+                emoji: '🎯',
+                url: 'https://playcanvas.com/project/662537/view',
+                thumbnail: '🎯'
+            }
         ];
 
         // Apps Data
@@ -592,9 +744,11 @@
 
         function loadGames() {
             const grid = document.getElementById('gamesGrid');
-            grid.innerHTML = games.map(game => `
-                <div class="game-card" onclick="quickAccess('${game.url}')">
-                    <div class="game-card-image">${game.emoji}</div>
+            grid.innerHTML = games.map((game, index) => `
+                <div class="game-card" onclick="playGame(${index})">
+                    <div class="game-card-image">
+                        <div class="game-overlay">${game.emoji}</div>
+                    </div>
                     <div class="game-card-title">${game.name}</div>
                 </div>
             `).join('');
@@ -628,6 +782,26 @@
                     <div class="app-name">${tool.name}</div>
                 </div>
             `).join('');
+        }
+
+        function playGame(index) {
+            const game = games[index];
+            document.getElementById('gameModalTitle').textContent = game.name;
+            document.getElementById('gameIframe').src = game.url;
+            document.getElementById('gameModal').classList.add('active');
+            
+            // Hide loading after a delay
+            setTimeout(() => {
+                document.getElementById('loadingMsg').style.display = 'none';
+                document.getElementById('gameIframe').style.display = 'block';
+            }, 2000);
+        }
+
+        function closeGameModal() {
+            document.getElementById('gameModal').classList.remove('active');
+            document.getElementById('gameIframe').src = '';
+            document.getElementById('loadingMsg').style.display = 'block';
+            document.getElementById('gameIframe').style.display = 'none';
         }
 
         function showSection(sectionId) {
@@ -675,19 +849,34 @@
 
         function toggleFullscreen() {
             if (!document.fullscreenElement) {
-                document.documentElement.requestFullscreen();
+                document.documentElement.requestFullscreen().catch(err => {
+                    console.log('Fullscreen not available');
+                });
             } else {
                 document.exitFullscreen();
             }
         }
 
-        // Close settings when clicking outside
+        // Close modals when clicking outside
         window.onclick = function(event) {
-            const modal = document.getElementById('settingsModal');
-            if (event.target == modal) {
-                modal.classList.remove('active');
+            const gameModal = document.getElementById('gameModal');
+            const settingsModal = document.getElementById('settingsModal');
+            
+            if (event.target == gameModal) {
+                closeGameModal();
+            }
+            if (event.target == settingsModal) {
+                closeSettings();
             }
         }
+
+        // Close game modal on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                closeGameModal();
+                closeSettings();
+            }
+        });
     </script>
 </body>
 </html>
